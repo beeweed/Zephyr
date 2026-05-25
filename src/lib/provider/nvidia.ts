@@ -99,10 +99,14 @@ export async function fetchNvidiaModels(apiKey: string): Promise<ProviderModel[]
   const payload = (await response.json()) as { object?: string; data?: NvidiaApiModel[] };
   if (!Array.isArray(payload.data)) return [];
 
+  const seen = new Set<string>();
   return payload.data
     .filter((m) => {
       const id = m.id.toLowerCase();
-      return !NON_TEXT_KEYWORDS.some((kw) => id.includes(kw));
+      if (NON_TEXT_KEYWORDS.some((kw) => id.includes(kw))) return false;
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
     })
     .map((m) => ({
       id: m.id,
@@ -223,10 +227,9 @@ function buildNvidiaRequestBody(model: string, messages: LlmMessage[]) {
     tools: FILE_TOOLS,
     tool_choice: "auto",
     stream: true,
-    temperature: 0.2,
-    top_p: 0.95,
-    max_tokens: 16384,
-    seed: 42,
+    temperature: 0.1,
+    top_p: 0.9,
+    max_tokens: 4096,
     chat_template_kwargs: {
       enable_thinking: false,
       clear_thinking: false,
