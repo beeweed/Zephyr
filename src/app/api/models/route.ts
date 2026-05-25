@@ -1,5 +1,6 @@
 import { fetchOpenRouterModels } from "@/lib/provider/openrouter";
 import { fetchGroqModels } from "@/lib/provider/groq";
+import { fetchNvidiaModels } from "@/lib/provider/nvidia";
 import type { Provider } from "@/types/agent";
 
 export const runtime = "nodejs";
@@ -20,10 +21,8 @@ export async function POST(request: Request) {
     const provider = (String(body.provider ?? "openrouter")) as Provider;
 
     if (typeof body.apiKey !== "string" || body.apiKey.trim().length < 8) {
-      return Response.json(
-        { error: `A valid ${provider === "groq" ? "Groq" : "OpenRouter"} API key is required.` },
-        { status: 400 },
-      );
+      const providerName = provider === "groq" ? "Groq" : provider === "nvidia" ? "Nvidia NIM" : "OpenRouter";
+      return Response.json({ error: `A valid ${providerName} API key is required.` }, { status: 400 });
     }
 
     const apiKey = body.apiKey.trim();
@@ -32,6 +31,11 @@ export async function POST(request: Request) {
       const models = await fetchGroqModels(apiKey);
       const toolCapable = models.filter((m) => GROQ_TOOL_CAPABLE.has(m.id));
       return Response.json({ models: toolCapable.length > 0 ? toolCapable : models });
+    }
+
+    if (provider === "nvidia") {
+      const models = await fetchNvidiaModels(apiKey);
+      return Response.json({ models });
     }
 
     const models = await fetchOpenRouterModels(apiKey);

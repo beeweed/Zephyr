@@ -33,6 +33,13 @@ const PROVIDERS: { id: Provider; label: string; keyPlaceholder: string; keyLink:
     keyLink: "https://console.groq.com/keys",
     keyLinkLabel: "Groq API keys",
   },
+  {
+    id: "nvidia",
+    label: "Nvidia NIM",
+    keyPlaceholder: "nvapi-...",
+    keyLink: "https://build.nvidia.com/explore/discover",
+    keyLinkLabel: "Nvidia NIM API keys",
+  },
 ];
 
 export function SettingsDialog({

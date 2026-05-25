@@ -21,7 +21,7 @@ export interface LlmMessage {
   tool_calls?: AgentToolCall[];
 }
 
-export type Provider = "openrouter" | "groq";
+export type Provider = "openrouter" | "groq" | "nvidia";
 
 export interface AgentStreamRequest {
   apiKey: string;

@@ -1,6 +1,7 @@
 import { MAX_AGENT_ITERATIONS } from "@/lib/systemprompt";
 import { streamOpenRouterChatCompletion } from "@/lib/provider/openrouter";
 import { streamGroqChatCompletion } from "@/lib/provider/groq";
+import { streamNvidiaChatCompletion } from "@/lib/provider/nvidia";
 import type { AgentStreamRequest, AgentToolCall, LlmMessage, Provider } from "@/types/agent";
 
 export type ServerStreamEvent =
@@ -61,12 +62,18 @@ export async function streamAgentTurn(
           model: request.model,
           messages: request.messages,
         })
-      : streamOpenRouterChatCompletion({
-          apiKey: request.apiKey,
-          model: request.model,
-          messages: request.messages,
-          appOrigin,
-        });
+      : provider === "nvidia"
+        ? streamNvidiaChatCompletion({
+            apiKey: request.apiKey,
+            model: request.model,
+            messages: request.messages,
+          })
+        : streamOpenRouterChatCompletion({
+            apiKey: request.apiKey,
+            model: request.model,
+            messages: request.messages,
+            appOrigin,
+          });
 
   for await (const chunk of stream) {
     if (chunk.content) {
