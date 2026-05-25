@@ -227,9 +227,10 @@ function buildNvidiaRequestBody(model: string, messages: LlmMessage[]) {
     tools: FILE_TOOLS,
     tool_choice: "auto",
     stream: true,
-    temperature: 0.1,
-    top_p: 0.9,
-    max_tokens: 4096,
+    temperature: 0.2,
+    top_p: 0.95,
+    max_tokens: 16384,
+    seed: 42,
     chat_template_kwargs: {
       enable_thinking: false,
       clear_thinking: false,
