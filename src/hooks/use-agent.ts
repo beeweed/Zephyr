@@ -6,7 +6,8 @@ import type {
   AgentToolCall,
   BrowserFileRecord,
   LlmMessage,
-  OpenRouterModel,
+  Provider,
+  ProviderModel,
   ToolExecutionResult,
   UiMessage,
 } from "@/types/agent";
@@ -17,6 +18,7 @@ const MAX_ITERATIONS = 1000;
 type Settings = {
   apiKey: string;
   model: string;
+  provider: Provider;
 };
 
 type StreamEvent =
@@ -29,7 +31,7 @@ type StreamEvent =
 
 export function useAgent() {
   const [settings, setSettingsState] = useState<Settings>(() => loadSavedSettings());
-  const [models, setModels] = useState<OpenRouterModel[]>([]);
+  const [models, setModels] = useState<ProviderModel[]>([]);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [files, setFiles] = useState<BrowserFileRecord[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -111,6 +113,7 @@ export function useAgent() {
       body: JSON.stringify({
         apiKey: settings.apiKey,
         model: settings.model,
+        provider: settings.provider,
         messages: llmMessagesRef.current,
         iteration,
       }),
@@ -166,7 +169,7 @@ export function useAgent() {
   const fetchModels = useCallback(async (apiKeyOverride?: string) => {
     const apiKey = (apiKeyOverride ?? settings.apiKey).trim();
     if (!apiKey) {
-      setModelError("Add an OpenRouter API key first.");
+      setModelError("Add an API key first.");
       return;
     }
 
@@ -176,21 +179,21 @@ export function useAgent() {
       const response = await fetch("/api/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey }),
+        body: JSON.stringify({ apiKey, provider: settings.provider }),
       });
-      const payload = (await response.json()) as { models?: OpenRouterModel[]; error?: string };
+      const payload = (await response.json()) as { models?: ProviderModel[]; error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Failed to fetch models.");
       const nextModels = payload.models ?? [];
       setModels(nextModels);
       if (!settings.model && nextModels[0]) {
-        setSettings({ apiKey, model: chooseDefaultModel(nextModels) });
+        setSettings({ apiKey, model: nextModels[0].id, provider: settings.provider });
       }
     } catch (error) {
-      setModelError(error instanceof Error ? error.message : "Failed to fetch OpenRouter models.");
+      setModelError(error instanceof Error ? error.message : `Failed to fetch models.`);
     } finally {
       setModelLoading(false);
     }
-  }, [settings.apiKey, settings.model, setSettings]);
+  }, [settings.apiKey, settings.model, settings.provider, setSettings]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -203,11 +206,11 @@ export function useAgent() {
     const prompt = content.trim();
     if (!prompt || isRunning) return;
     if (!settings.apiKey.trim()) {
-      setAgentError("Open Settings and add an OpenRouter API key.");
+      setAgentError("Open Settings and add an API key.");
       return;
     }
     if (!settings.model.trim()) {
-      setAgentError("Open Settings and select an OpenRouter model.");
+      setAgentError("Open Settings and select a model.");
       return;
     }
 
@@ -280,6 +283,11 @@ export function useAgent() {
     setSelectedPath((current) => (current === path ? null : current));
   }, [refreshFiles]);
 
+  const updateFile = useCallback(async (path: string, content: string) => {
+    await BrowserFileStore.writeFile({ file_path: path, content });
+    await refreshFiles();
+  }, [refreshFiles]);
+
   return {
     settings,
     setSettings,
@@ -299,6 +307,7 @@ export function useAgent() {
     setSelectedPath,
     clearFiles,
     deleteFile,
+    updateFile,
     refreshFiles,
     agentError,
   };
@@ -354,22 +363,16 @@ async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<Stream
 }
 
 function loadSavedSettings(): Settings {
-  if (typeof window === "undefined") return { apiKey: "", model: "" };
+  if (typeof window === "undefined") return { apiKey: "", model: "", provider: "openrouter" };
   try {
     const saved = localStorage.getItem(SETTINGS_KEY);
-    return saved ? { apiKey: "", model: "", ...JSON.parse(saved) } : { apiKey: "", model: "" };
+    return saved
+      ? { apiKey: "", model: "", provider: "openrouter", ...JSON.parse(saved) }
+      : { apiKey: "", model: "", provider: "openrouter" };
   } catch {
     localStorage.removeItem(SETTINGS_KEY);
-    return { apiKey: "", model: "" };
+    return { apiKey: "", model: "", provider: "openrouter" };
   }
 }
 
-function chooseDefaultModel(models: OpenRouterModel[]): string {
-  const preferred = [
-    "anthropic/claude-sonnet-4.5",
-    "openai/gpt-5.2",
-    "google/gemini-3-pro-preview",
-    "anthropic/claude-3.7-sonnet",
-  ];
-  return preferred.find((id) => models.some((model) => model.id === id)) ?? models[0]?.id ?? "";
-}
+

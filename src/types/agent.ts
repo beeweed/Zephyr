@@ -21,9 +21,12 @@ export interface LlmMessage {
   tool_calls?: AgentToolCall[];
 }
 
+export type Provider = "openrouter" | "groq";
+
 export interface AgentStreamRequest {
   apiKey: string;
   model: string;
+  provider?: Provider;
   messages: LlmMessage[];
   iteration: number;
 }
@@ -76,6 +79,12 @@ export type UiMessage =
       status: "streaming" | "complete" | "error";
       error?: string;
     };
+
+export interface ProviderModel {
+  id: string;
+  name: string;
+  provider: Provider;
+}
 
 export interface OpenRouterModel {
   id: string;

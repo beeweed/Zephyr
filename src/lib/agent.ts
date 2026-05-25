@@ -1,6 +1,7 @@
 import { MAX_AGENT_ITERATIONS } from "@/lib/systemprompt";
 import { streamOpenRouterChatCompletion } from "@/lib/provider/openrouter";
-import type { AgentStreamRequest, AgentToolCall, LlmMessage } from "@/types/agent";
+import { streamGroqChatCompletion } from "@/lib/provider/groq";
+import type { AgentStreamRequest, AgentToolCall, LlmMessage, Provider } from "@/types/agent";
 
 export type ServerStreamEvent =
   | { type: "meta"; iteration: number; maxIterations: number }
@@ -17,7 +18,7 @@ export function validateAgentStreamRequest(input: unknown): AgentStreamRequest {
 
   const body = input as Partial<AgentStreamRequest>;
   if (typeof body.apiKey !== "string" || body.apiKey.trim().length < 8) {
-    throw new Error("A valid OpenRouter API key is required.");
+    throw new Error("A valid API key is required.");
   }
   if (typeof body.model !== "string" || body.model.trim().length === 0) {
     throw new Error("A model id is required.");
@@ -32,9 +33,12 @@ export function validateAgentStreamRequest(input: unknown): AgentStreamRequest {
     throw new Error(`Maximum iteration limit reached (${MAX_AGENT_ITERATIONS}).`);
   }
 
+  const provider: Provider = body.provider ?? "openrouter";
+
   return {
     apiKey: body.apiKey.trim(),
     model: body.model.trim(),
+    provider,
     messages: sanitizeMessages(body.messages),
     iteration: body.iteration,
   };
@@ -48,17 +52,29 @@ export async function streamAgentTurn(
   await emit({ type: "meta", iteration: request.iteration, maxIterations: MAX_AGENT_ITERATIONS });
 
   let emittedToolCalls = false;
-  for await (const chunk of streamOpenRouterChatCompletion({
-    apiKey: request.apiKey,
-    model: request.model,
-    messages: request.messages,
-    appOrigin,
-  })) {
+  const provider = request.provider ?? "openrouter";
+
+  const stream =
+    provider === "groq"
+      ? streamGroqChatCompletion({
+          apiKey: request.apiKey,
+          model: request.model,
+          messages: request.messages,
+        })
+      : streamOpenRouterChatCompletion({
+          apiKey: request.apiKey,
+          model: request.model,
+          messages: request.messages,
+          appOrigin,
+        });
+
+  for await (const chunk of stream) {
     if (chunk.content) {
       await emit({ type: "token", value: chunk.content });
     }
-    if (chunk.reasoning) {
-      await emit({ type: "reasoning", value: chunk.reasoning });
+    const reasoning = "reasoning" in chunk ? (chunk as { reasoning?: string }).reasoning : undefined;
+    if (reasoning) {
+      await emit({ type: "reasoning", value: reasoning });
     }
     if (chunk.toolCalls && chunk.toolCalls.length > 0) {
       emittedToolCalls = true;
