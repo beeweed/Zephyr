@@ -24,7 +24,7 @@
 - `/api/agent` - `POST` SSE route for one streaming agent turn. Body includes `apiKey`, `model`, `messages`, and `iteration`.
 
 ## Live URL
-- Sandbox live URL: https://3000-ijlvlyk85h3cfgykqmm9u-dfc00ec5.sandbox.novita.ai
+- Application live URL: https://zephyr-two-omega.vercel.app/
 
 ## Data Architecture
 - **LLM messages**: Maintained in browser memory for the active session.
