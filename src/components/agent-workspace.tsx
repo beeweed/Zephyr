@@ -13,7 +13,7 @@ export function AgentWorkspace() {
 
   const settings = (
     <SettingsDialog
-      apiKey={agent.settings.apiKey}
+      providerKeys={agent.settings.providerKeys}
       model={agent.settings.model}
       models={agent.models}
       loading={agent.modelLoading}

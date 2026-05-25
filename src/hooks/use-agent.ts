@@ -19,6 +19,7 @@ type Settings = {
   apiKey: string;
   model: string;
   provider: Provider;
+  providerKeys: Record<Provider, string>;
 };
 
 type StreamEvent =
@@ -49,9 +50,10 @@ export function useAgent() {
     [files, selectedPath],
   );
 
-  const setSettings = useCallback((next: Settings) => {
-    setSettingsState(next);
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+  const setSettings = useCallback((next: { providerKeys: Record<Provider, string>; model: string; provider: Provider }) => {
+    const synced = { ...next, apiKey: next.providerKeys[next.provider] ?? "" } satisfies Settings;
+    setSettingsState(synced);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(synced));
   }, []);
 
   const refreshFiles = useCallback(async () => {
@@ -111,7 +113,7 @@ export function useAgent() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        apiKey: settings.apiKey,
+        apiKey: settings.providerKeys[settings.provider] ?? "",
         model: settings.model,
         provider: settings.provider,
         messages: llmMessagesRef.current,
@@ -164,10 +166,11 @@ export function useAgent() {
       llmMessagesRef.current = [...llmMessagesRef.current, { role: "assistant", content: assistantContent }];
     }
     return null;
-  }, [settings.apiKey, settings.model, updateAssistantMessage]);
+  }, [settings.provider, settings.providerKeys, settings.model, updateAssistantMessage]);
 
-  const fetchModels = useCallback(async (apiKeyOverride?: string) => {
-    const apiKey = (apiKeyOverride ?? settings.apiKey).trim();
+  const fetchModels = useCallback(async (apiKeyOverride?: string, providerOverride?: Provider) => {
+    const targetProvider = providerOverride ?? settings.provider;
+    const apiKey = (apiKeyOverride ?? settings.providerKeys[targetProvider] ?? "").trim();
     if (!apiKey) {
       setModelError("Add an API key first.");
       return;
@@ -179,21 +182,21 @@ export function useAgent() {
       const response = await fetch("/api/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey, provider: settings.provider }),
+        body: JSON.stringify({ apiKey, provider: targetProvider }),
       });
       const payload = (await response.json()) as { models?: ProviderModel[]; error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Failed to fetch models.");
       const nextModels = payload.models ?? [];
       setModels(nextModels);
       if (!settings.model && nextModels[0]) {
-        setSettings({ apiKey, model: nextModels[0].id, provider: settings.provider });
+        setSettings({ model: nextModels[0].id, provider: targetProvider, providerKeys: { ...settings.providerKeys, [targetProvider]: apiKey } });
       }
     } catch (error) {
       setModelError(error instanceof Error ? error.message : `Failed to fetch models.`);
     } finally {
       setModelLoading(false);
     }
-  }, [settings.apiKey, settings.model, settings.provider, setSettings]);
+  }, [settings.model, settings.providerKeys, setSettings]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -205,8 +208,9 @@ export function useAgent() {
   const sendMessage = useCallback(async (content: string) => {
     const prompt = content.trim();
     if (!prompt || isRunning) return;
-    if (!settings.apiKey.trim()) {
-      setAgentError("Open Settings and add an API key.");
+    const activeKey = settings.providerKeys[settings.provider] ?? "";
+    if (!activeKey.trim()) {
+      setAgentError("Open Settings and add an API key for the selected provider.");
       return;
     }
     if (!settings.model.trim()) {
@@ -262,7 +266,7 @@ export function useAgent() {
       abortRef.current = null;
       await refreshFiles();
     }
-  }, [executeToolCalls, isRunning, refreshFiles, runSingleAgentTurn, settings.apiKey, settings.model]);
+  }, [executeToolCalls, isRunning, refreshFiles, runSingleAgentTurn, settings.provider, settings.providerKeys, settings.model]);
 
   const clearConversation = useCallback(() => {
     stop();
@@ -339,6 +343,44 @@ async function executeSingleToolCall(call: AgentToolCall): Promise<ToolExecution
   });
 }
 
+function defaultSettings(): Settings {
+  return { apiKey: "", model: "", provider: "openrouter", providerKeys: { openrouter: "", groq: "", nvidia: "" } };
+}
+
+function loadSavedSettings(): Settings {
+  if (typeof window === "undefined") return defaultSettings();
+  try {
+    const saved = localStorage.getItem(SETTINGS_KEY);
+    if (!saved) return defaultSettings();
+    const parsed = JSON.parse(saved) as Record<string, unknown>;
+    if (parsed.providerKeys && typeof parsed.providerKeys === "object") {
+      const keys = parsed.providerKeys as Record<string, string>;
+      const provider = (parsed.provider as Provider) ?? "openrouter";
+      return {
+        ...defaultSettings(),
+        model: (parsed.model as string) ?? "",
+        provider,
+        providerKeys: { openrouter: keys.openrouter ?? "", groq: keys.groq ?? "", nvidia: keys.nvidia ?? "" },
+        apiKey: keys[provider] ?? "",
+      } satisfies Settings;
+    }
+    const provider = (parsed.provider as Provider) ?? "openrouter";
+    const oldKey = (parsed.apiKey as string) ?? "";
+    const keys: Record<Provider, string> = { openrouter: "", groq: "", nvidia: "" };
+    keys[provider] = oldKey;
+    return {
+      ...defaultSettings(),
+      model: (parsed.model as string) ?? "",
+      provider,
+      providerKeys: keys,
+      apiKey: oldKey,
+    } satisfies Settings;
+  } catch {
+    localStorage.removeItem(SETTINGS_KEY);
+    return defaultSettings();
+  }
+}
+
 async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -362,17 +404,6 @@ async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<Stream
   }
 }
 
-function loadSavedSettings(): Settings {
-  if (typeof window === "undefined") return { apiKey: "", model: "", provider: "openrouter" };
-  try {
-    const saved = localStorage.getItem(SETTINGS_KEY);
-    return saved
-      ? { apiKey: "", model: "", provider: "openrouter", ...JSON.parse(saved) }
-      : { apiKey: "", model: "", provider: "openrouter" };
-  } catch {
-    localStorage.removeItem(SETTINGS_KEY);
-    return { apiKey: "", model: "", provider: "openrouter" };
-  }
-}
+
 
 
