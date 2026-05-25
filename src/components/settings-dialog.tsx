@@ -1,8 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import * as Select from "@radix-ui/react-select";
-import { Check, ChevronDown, Loader2, Search, Settings, X } from "lucide-react";
+import { Check, Loader2, Search, Settings, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Provider, ProviderModel } from "@/types/agent";
 import { cn } from "@/lib/utils";
@@ -203,48 +202,50 @@ export function SettingsDialog({
                 </p>
               ) : null}
 
-              <label className="block">
-                <Select.Root
-                  name="model"
-                  value={model || undefined}
-                  onValueChange={(value) => onSave({ providerKeys: localKeys, model: value, provider: activeProvider })}
-                >
-                  <Select.Trigger className="flex h-11 w-full items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3.5 text-left text-sm text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 sm:h-12 sm:rounded-2xl sm:px-4">
-                    <Select.Value placeholder="Select a model" />
-                    <Select.Icon>
-                      <ChevronDown className="h-4 w-4 text-zinc-400" />
-                    </Select.Icon>
-                  </Select.Trigger>
-                  <Select.Portal>
-                    <Select.Content className="z-[70] max-h-72 overflow-hidden rounded-2xl border border-white/10 bg-[#222225] text-zinc-100 shadow-2xl sm:max-h-80">
-                      <Select.Viewport className="p-1.5 sm:p-2">
-                        {filteredModels.length === 0 ? (
-                          <div className="px-3 py-6 text-center text-sm text-zinc-500">
-                            {searchQuery ? "No models match your search." : "Click a provider above to fetch models."}
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-black/20 sm:max-h-56 sm:rounded-2xl">
+                {filteredModels.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-sm text-zinc-500">
+                    {searchQuery ? "No models match your search." : "Click a provider above to fetch models."}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-white/[0.04]">
+                    {filteredModels.map((item) => {
+                      const isSelected = item.id === model;
+                      return (
+                        <button
+                          key={`${item.provider}-${item.id}`}
+                          type="button"
+                          onClick={() => onSave({ providerKeys: localKeys, model: item.id, provider: activeProvider })}
+                          className={cn(
+                            "flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition sm:px-4 sm:py-3",
+                            isSelected ? "bg-indigo-500/10" : "hover:bg-white/[0.03]",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition",
+                              isSelected
+                                ? "border-indigo-400 bg-indigo-500 text-white"
+                                : "border-zinc-600",
+                            )}
+                          >
+                            {isSelected ? <Check className="h-2.5 w-2.5" /> : null}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate font-medium text-zinc-100">{item.name || item.id}</span>
+                              <span className="shrink-0 rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-medium text-indigo-300">
+                                {item.provider}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-xs text-zinc-500">{item.id}</p>
                           </div>
-                        ) : (
-                          filteredModels.map((item) => (
-                            <Select.Item
-                              key={`${item.provider}-${item.id}`}
-                              value={item.id}
-                              className="relative cursor-pointer rounded-xl py-2 pl-8 pr-3 text-sm outline-none data-[highlighted]:bg-white/10 sm:pl-9"
-                            >
-                              <Select.ItemIndicator className="absolute left-2.5 top-1/2 -translate-y-1/2 text-indigo-300 sm:left-3">
-                                <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                              </Select.ItemIndicator>
-                              <Select.ItemText>
-                                <span className="text-xs text-indigo-300">{item.provider}</span>{" "}
-                                {item.name || item.id}
-                              </Select.ItemText>
-                              <span className="mt-0.5 block truncate text-xs text-zinc-500">{item.id}</span>
-                            </Select.Item>
-                          ))
-                        )}
-                      </Select.Viewport>
-                    </Select.Content>
-                  </Select.Portal>
-                </Select.Root>
-              </label>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             <footer className="flex justify-end gap-2 border-t border-white/10 pt-4 sm:gap-3 sm:pt-5">
